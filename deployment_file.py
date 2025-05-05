@@ -1,62 +1,59 @@
-# streamlit_app.py
 import streamlit as st
-import pandas as pd
-import joblib
-from subdirectory.preprocess import preprocess_input
-from model_router import load_model
+import pickle
+import numpy as np
 
-st.set_page_config(page_title="Stroke Predictor", layout="centered")
-st.title("🧠 Stroke Prediction App")
+# Load model
+with open("D:/Studies/machine_learning_data_set/StrokePrediction/models/logistic.pkl", "rb") as f:
+    model = pickle.load(f)
 
-# -------------------------
-# 1. Model Selection
-# -------------------------
-model_options = [
-    "randomforest", "xgboost", "catboost", "decisiontree",
-    "balancedrandomforest", "lightgbm", "knn", "svm",
-    "naivebayes", "logisticregression", "votingclassifier", "stacking"
-]
-model_choice = st.selectbox("Choose a Model to Use:", model_options)
+st.title("Stroke Prediction App")
 
-# -------------------------
-# 2. User Input
-# -------------------------
-with st.form("input_form"):
-    gender = st.selectbox("Gender", ["Male", "Female", "Other"])
-    age = st.slider("Age", 0, 100)
-    hypertension = st.selectbox("Hypertension", [0, 1])
-    heart_disease = st.selectbox("Heart Disease", [0, 1])
-    ever_married = st.selectbox("Ever Married", ["Yes", "No"])
-    work_type = st.selectbox("Work Type", ["Private", "Self-employed", "Govt_job", "children", "Never_worked"])
-    residence_type = st.selectbox("Residence Type", ["Urban", "Rural"])
-    avg_glucose_level = st.number_input("Average Glucose Level", 0.0, 300.0)
-    bmi = st.number_input("BMI", 10.0, 60.0)
-    smoking_status = st.selectbox("Smoking Status", ["never smoked", "formerly smoked", "smokes", "Unknown"])
+st.write("Enter patient details below:")
 
-    submitted = st.form_submit_button("Predict")
+# Numerical inputs
+age = st.number_input("Age", min_value=0.0, max_value=120.0)
+avg_glucose = st.number_input("Average Glucose Level")
+bmi = st.number_input("BMI")
 
-# -------------------------
-# 3. Prediction Logic
-# -------------------------
-if submitted:
-    input_data = pd.DataFrame([{
-        "gender": gender,
-        "age": age,
-        "hypertension": hypertension,
-        "heart_disease": heart_disease,
-        "ever_married": ever_married,
-        "work_type": work_type,
-        "Residence_type": residence_type,
-        "avg_glucose_level": avg_glucose_level,
-        "bmi": bmi,
-        "smoking_status": smoking_status
-    }])
+# Binary inputs
+hypertension = st.checkbox("Hypertension")
+heart_disease = st.checkbox("Heart Disease")
 
-    try:
-        X_processed = preprocess_input(input_data, model_choice)
-        model = load_model(model_choice)
-        prediction = model.predict(X_processed)[0]
+# One-hot encoded categories
+gender = st.selectbox("Gender", ["Female", "Male", "Other"])
+ever_married = st.selectbox("Ever Married", ["No", "Yes"])
+work_type = st.selectbox("Work Type", ["Govt_job", "Never_worked", "Private", "Self-employed", "children"])
+residence_type = st.selectbox("Residence Type", ["Rural", "Urban"])
+smoking_status = st.selectbox("Smoking Status", ["Unknown", "formerly smoked", "never smoked", "smokes"])
 
-        st.success(f"✅ Prediction: {'Stroke Risk' if prediction == 1 else 'No Stroke Risk'}")
-    except Exception as e:
-        st.error(f"❌ Error during prediction: {str(e)}")
+# Manual one-hot encoding (matching model input format)
+gender_Male = gender == "Male"
+gender_Other = gender == "Other"
+ever_married_Yes = ever_married == "Yes"
+
+work_type_Never_worked = work_type == "Never_worked"
+work_type_Private = work_type == "Private"
+work_type_Self_employed = work_type == "Self-employed"
+work_type_children = work_type == "children"
+
+Residence_type_Urban = residence_type == "Urban"
+
+smoking_status_formerly = smoking_status == "formerly smoked"
+smoking_status_never = smoking_status == "never smoked"
+smoking_status_smokes = smoking_status == "smokes"
+
+# Assemble features in the same order as training
+features = np.array([[age, hypertension, heart_disease, avg_glucose, bmi,
+                      gender_Male, gender_Other, ever_married_Yes,
+                      work_type_Never_worked, work_type_Private,
+                      work_type_Self_employed, work_type_children,
+                      Residence_type_Urban,
+                      smoking_status_formerly, smoking_status_never, smoking_status_smokes]])
+
+# Predict
+if st.button("Predict Stroke Risk"):
+    result = model.predict(features)
+    print(result)
+    proba = model.predict_proba(features)
+    st.success(f"Prediction: {'Stroke Risk' if result[0] == 1 else 'No Stroke Risk'}")
+
